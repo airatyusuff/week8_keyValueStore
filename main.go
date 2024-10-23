@@ -10,7 +10,7 @@ type Pair struct {
 	value string
 }
 
-var keyValueStore = []Pair{}
+var keyValueStore = make(map[string]string)
 
 type operation struct {
 	reqType  string
@@ -49,7 +49,7 @@ func Store(key string, value string) {
 func Fetch(key string) {
 	fetchop := operation{
 		reqType:  "fetch",
-		param:    Pair{key: key, value: ""},
+		param:    Pair{key: key},
 		response: make(chan string),
 	}
 
@@ -59,10 +59,9 @@ func Fetch(key string) {
 }
 
 func findValue(key string) string {
-	for _, kv := range keyValueStore {
-		if kv.key == key {
-			return kv.value
-		}
+	value, exists := keyValueStore[key]
+	if exists {
+		return value
 	}
 	return "Key not found"
 }
@@ -72,7 +71,7 @@ func monitorRequests() {
 		switch op.reqType {
 		case "store":
 			fmt.Printf("Processing: %s request for key %s and value %s\n", op.reqType, op.param.key, op.param.value)
-			keyValueStore = append(keyValueStore, op.param)
+			keyValueStore[op.param.key] = op.param.value
 
 		case "fetch":
 			fmt.Println("Processing: ", op.reqType, " request for key ", op.param.key)
@@ -88,7 +87,7 @@ func monitorRequests() {
 	done <- "done" //send anything to done channel so stop() can unblock
 }
 
-func addBunchOfPairs() {
+func bunchOfOps() {
 	go Fetch("last")
 	go Store("first", "1")
 	go Store("second", "2")
@@ -107,5 +106,5 @@ func main() {
 
 	defer Stop()
 
-	addBunchOfPairs()
+	bunchOfOps()
 }
