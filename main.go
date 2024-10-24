@@ -10,15 +10,18 @@ type Pair struct {
 	value string
 }
 
-var keyValueStore = make(map[string]string)
-
 type operation struct {
-	reqType  string
+	name     string
 	param    Pair
 	response chan string
 }
 
-var requests chan operation = make(chan operation)
+type Request struct {
+	command Command
+}
+
+var keyValueStore = make(map[string]string)
+var requests chan Request = make(chan Request)
 var done chan any = make(chan any)
 
 func Start() {
@@ -27,9 +30,11 @@ func Start() {
 
 func Stop() {
 	shutdown := operation{
-		reqType: "stop",
+		name: "stop",
 	}
-	requests <- shutdown
+	requests <- Request{
+		command: &StopCommand{op: shutdown},
+	}
 	<-done
 }
 
@@ -39,23 +44,24 @@ func Store(key string, value string) {
 		value: value,
 	}
 
-	requests <- operation{
-		reqType:  "store",
-		param:    newPair,
-		response: nil,
+	store := operation{
+		name:  "store",
+		param: newPair,
 	}
+
+	requests <- Request{command: &StoreCommand{op: store}}
 }
 
 func Fetch(key string) {
 	fetchop := operation{
-		reqType:  "fetch",
+		name:     "fetch",
 		param:    Pair{key: key},
 		response: make(chan string),
 	}
 
-	requests <- fetchop
+	requests <- Request{command: &FetchCommand{op: fetchop}}
 	// return <-fetchop.response
-	fmt.Println("result of ", fetchop.param.key, ": ", <-fetchop.response)
+	fmt.Printf("Value of %s: %s\n", fetchop.param.key, <-fetchop.response)
 }
 
 func findValue(key string) string {
@@ -67,20 +73,8 @@ func findValue(key string) string {
 }
 
 func monitorRequests() {
-	for op := range requests {
-		switch op.reqType {
-		case "store":
-			fmt.Printf("Processing: %s request for key %s and value %s\n", op.reqType, op.param.key, op.param.value)
-			keyValueStore[op.param.key] = op.param.value
-
-		case "fetch":
-			fmt.Println("Processing: ", op.reqType, " request for key ", op.param.key)
-			op.response <- findValue(op.param.key)
-
-		case "stop":
-			fmt.Println("Shutting down")
-			close(requests)
-		}
+	for req := range requests {
+		req.command.Execute()
 	}
 
 	fmt.Println("All requests processed")
@@ -101,7 +95,7 @@ func bunchOfOps() {
 }
 
 func main() {
-	fmt.Println("Helllllllo")
+	fmt.Print("\n----- Concurrency, with Command pattern for processing requests ----\n\n")
 	Start()
 
 	defer Stop()
